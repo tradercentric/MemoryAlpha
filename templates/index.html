@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MemoryAlpha — Photo Albums</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #16213e;
+    border-bottom: 2px solid #0f3460;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+    color: #e94560;
+    letter-spacing: 1px;
+  }
+
+  header .subtitle {
+    color: #888;
+    font-size: 0.9rem;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+  }
+
+  /* Views */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card h2 {
+    color: #e94560;
+    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+  }
+
+  /* Form elements */
+  .form-group {
+    margin-bottom: 1.2rem;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #aaa;
+    font-size: 0.9rem;
+  }
+
+  input[type="text"],
+  input[type="password"] {
+    width: 100%;
+    padding: 0.6rem 0.9rem;
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input[type="text"]:focus,
+  input[type="password"]:focus {
+    border-color: #e94560;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 0.6rem 1.4rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: #e94560;
+    color: #fff;
+  }
+
+  .btn-secondary {
+    background: #0f3460;
+    color: #e0e0e0;
+  }
+
+  .btn-danger {
+    background: #7a1a2e;
+    color: #fff;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed #0f3460;
+    border-radius: 8px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1rem;
+  }
+
+  .dropzone.dragover {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.05);
+  }
+
+  .dropzone p {
+    color: #666;
+    margin-bottom: 0.5rem;
+  }
+
+  .dropzone .drop-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  /* Photo grid */
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .photo-item {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #0f3460;
+    aspect-ratio: 1;
+  }
+
+  .photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .photo-item .delete-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(233, 69, 96, 0.85);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .photo-item:hover .delete-btn { opacity: 1; }
+
+  /* Album ID display */
+  .album-id-box {
+    background: #0f3460;
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .album-id-box code {
+    font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.9rem;
+    color: #4ecca3;
+    flex: 1;
+    word-break: break-all;
+  }
+
+  /* Home view layout */
+  .home-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 600px) {
+    .home-actions { grid-template-columns: 1fr; }
+  }
+
+  /* Progress */
+  .progress-text {
+    color: #4ecca3;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    min-height: 1.3em;
+  }
+
+  /* Album header row */
+  .album-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+
+  .album-header h2 {
+    color: #e94560;
+    font-size: 1.3rem;
+  }
+
+  /* Error / success messages */
+  .msg {
+    padding: 0.7rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  .msg.error { background: rgba(233,69,96,0.15); border: 1px solid #e94560; color: #e94560; }
+  .msg.success { background: rgba(78,204,163,0.1); border: 1px solid #4ecca3; color: #4ecca3; }
+  .msg.show { display: block; }
+
+  .empty-state {
+    text-align: center;
+    color: #555;
+    padding: 2rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MemoryAlpha</h1>
+  <span class="subtitle">Private Photo Albums</span>
+</header>
+
+<div class="container">
+
+  <!-- HOME VIEW -->
+  <div id="view-home" class="view active">
+    <div class="home-actions">
+      <div class="card">
+        <h2>Create Album</h2>
+        <p style="color:#888; margin-bottom:1.5rem; font-size:0.9rem;">Start a new private album protected by a secret.</p>
+        <button class="btn btn-primary" onclick="showView('create')">New Album</button>
+      </div>
+      <div class="card">
+        <h2>Open Album</h2>
+        <p style="color:#888; margin-bottom:1rem; font-size:0.9rem;">Enter your album ID to access photos.</p>
+        <div class="form-group">
+          <input type="text" id="open-album-id" placeholder="Album ID (uuid)" />
+        </div>
+        <button class="btn btn-secondary" onclick="openAlbum()">Open</button>
+        <div id="home-msg" class="msg error"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE VIEW -->
+  <div id="view-create" class="view">
+    <div class="card">
+      <h2>Create New Album</h2>
+      <div class="form-group">
+        <label>Album Name</label>
+        <input type="text" id="create-name" placeholder="My Vacation Photos" />
+      </div>
+      <div class="form-group">
+        <label>Secret (remember this — you'll need it to open the album)</label>
+        <input type="password" id="create-secret" placeholder="Choose a secret" />
+      </div>
+
+      <label style="margin-bottom:0.6rem; display:block;">Photos (optional — you can add more later)</label>
+      <div class="dropzone" id="create-dropzone" onclick="document.getElementById('create-file-input').click()">
+        <span class="drop-icon">📷</span>
+        <p>Drag &amp; drop photos here, or click to select</p>
+        <p style="font-size:0.8rem;">Multiple files supported</p>
+      </div>
+      <input type="file" id="create-file-input" multiple accept="image/*" style="display:none" />
+      <div id="create-file-list" style="color:#888; font-size:0.85rem; margin-bottom:1rem;"></div>
+
+      <div id="create-msg" class="msg error"></div>
+      <div style="display:flex; gap:1rem;">
+        <button class="btn btn-primary" onclick="createAlbum()">Create Album</button>
+        <button class="btn btn-secondary" onclick="showView('home')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATED VIEW (show album ID) -->
+  <div id="view-created" class="view">
+    <div class="card">
+      <h2>Album Created!</h2>
+      <p style="color:#888; margin-bottom:1rem; font-size:0.9rem;">Save this Album ID — you'll need it to open your album again.</p>
+      <div class="album-id-box">
+        <code id="new-album-id"></code>
+        <button class="btn btn-secondary" onclick="copyAlbumId()" style="white-space:nowrap;">Copy ID</button>
+      </div>
+      <button class="btn btn-primary" onclick="goToNewAlbum()">Open Album →</button>
+    </div>
+  </div>
+
+  <!-- VERIFY VIEW -->
+  <div id="view-verify" class="view">
+    <div class="card">
+      <h2>Enter Secret</h2>
+      <p style="color:#888; margin-bottom:1rem; font-size:0.9rem;">Album: <span id="verify-album-name" style="color:#e0e0e0;"></span></p>
+      <div class="form-group">
+        <label>Secret</label>
+        <input type="password" id="verify-secret" placeholder="Album secret" onkeydown="if(event.key==='Enter') verifySecret()" />
+      </div>
+      <div id="verify-msg" class="msg error"></div>
+      <div style="display:flex; gap:1rem;">
+        <button class="btn btn-primary" onclick="verifySecret()">Unlock</button>
+        <button class="btn btn-secondary" onclick="showView('home')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALBUM VIEW -->
+  <div id="view-album" class="view">
+    <div class="card">
+      <div class="album-header">
+        <h2 id="album-name-display"></h2>
+        <button class="btn btn-secondary" onclick="lockAlbum()" style="font-size:0.85rem;">🔒 Lock</button>
+      </div>
+
+      <!-- Upload zone -->
+      <div class="dropzone" id="album-dropzone" onclick="document.getElementById('album-file-input').click()">
+        <span class="drop-icon">+</span>
+        <p>Drag &amp; drop photos to add, or click to select</p>
+      </div>
+      <input type="file" id="album-file-input" multiple accept="image/*" style="display:none" />
+      <div id="upload-progress" class="progress-text"></div>
+
+      <div id="album-msg" class="msg error"></div>
+
+      <div id="photo-grid" class="photo-grid"></div>
+      <div id="empty-state" class="empty-state" style="display:none;">No photos yet. Add some above!</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentAlbumId = null;
+let currentAlbumName = null;
+let pendingVerifyId = null;
+let createdAlbumId = null;
+
+// --- View management ---
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+}
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + type + ' show';
+}
+
+function hideMsg(id) {
+  const el = document.getElementById(id);
+  el.className = 'msg';
+}
+
+// --- Home ---
+async function openAlbum() {
+  const albumId = document.getElementById('open-album-id').value.trim();
+  if (!albumId) { showMsg('home-msg', 'Please enter an Album ID.', 'error'); return; }
+  hideMsg('home-msg');
+
+  // Try to GET album info — if authed already it works, else we get 401
+  const res = await fetch(`/api/albums/${albumId}`);
+  if (res.status === 401) {
+    // Need to verify — first check album exists by trying verify endpoint with empty secret
+    // We'll just show verify view and load name lazily
+    pendingVerifyId = albumId;
+    document.getElementById('verify-album-name').textContent = '';
+    document.getElementById('verify-secret').value = '';
+    hideMsg('verify-msg');
+    // Try to get album name by peeking (we can't without auth, so just show ID)
+    document.getElementById('verify-album-name').textContent = albumId;
+    showView('verify');
+    return;
+  }
+  if (!res.ok) {
+    const d = await res.json();
+    showMsg('home-msg', d.error || 'Album not found.', 'error');
+    return;
+  }
+  const data = await res.json();
+  loadAlbumView(albumId, data.name, data.photos);
+}
+
+// --- Create ---
+const createDropzone = document.getElementById('create-dropzone');
+const createFileInput = document.getElementById('create-file-input');
+let createFiles = [];
+
+createDropzone.addEventListener('dragover', e => { e.preventDefault(); createDropzone.classList.add('dragover'); });
+createDropzone.addEventListener('dragleave', () => createDropzone.classList.remove('dragover'));
+createDropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  createDropzone.classList.remove('dragover');
+  addCreateFiles(e.dataTransfer.files);
+});
+createFileInput.addEventListener('change', () => addCreateFiles(createFileInput.files));
+
+function addCreateFiles(files) {
+  for (const f of files) createFiles.push(f);
+  updateCreateFileList();
+}
+
+function updateCreateFileList() {
+  const el = document.getElementById('create-file-list');
+  el.textContent = createFiles.length ? `${createFiles.length} file(s) selected` : '';
+}
+
+async function createAlbum() {
+  const name = document.getElementById('create-name').value.trim();
+  const secret = document.getElementById('create-secret').value;
+  if (!name) { showMsg('create-msg', 'Album name is required.', 'error'); return; }
+  if (!secret) { showMsg('create-msg', 'Secret is required.', 'error'); return; }
+  hideMsg('create-msg');
+
+  const res = await fetch('/api/albums', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, secret })
+  });
+
+  if (!res.ok) {
+    const d = await res.json();
+    showMsg('create-msg', d.error || 'Failed to create album.', 'error');
+    return;
+  }
+
+  const data = await res.json();
+  currentAlbumId = data.album_id;
+  currentAlbumName = data.name;
+  createdAlbumId = data.album_id;
+
+  // Upload initial files if any
+  if (createFiles.length > 0) {
+    await uploadFiles(currentAlbumId, createFiles, 'create-msg');
+  }
+
+  // Reset form
+  document.getElementById('create-name').value = '';
+  document.getElementById('create-secret').value = '';
+  createFiles = [];
+  updateCreateFileList();
+
+  document.getElementById('new-album-id').textContent = data.album_id;
+  showView('created');
+}
+
+function copyAlbumId() {
+  const id = document.getElementById('new-album-id').textContent;
+  navigator.clipboard.writeText(id).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy ID', 1500);
+  });
+}
+
+function goToNewAlbum() {
+  // Already authed, just load it
+  document.getElementById('open-album-id').value = '';
+  fetch(`/api/albums/${createdAlbumId}`)
+    .then(r => r.json())
+    .then(data => loadAlbumView(createdAlbumId, data.name, data.photos));
+}
+
+// --- Verify ---
+async function verifySecret() {
+  const secret = document.getElementById('verify-secret').value;
+  if (!secret) { showMsg('verify-msg', 'Secret is required.', 'error'); return; }
+  hideMsg('verify-msg');
+
+  const res = await fetch(`/api/albums/${pendingVerifyId}/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret })
+  });
+
+  if (!res.ok) {
+    const d = await res.json();
+    showMsg('verify-msg', d.error || 'Failed.', 'error');
+    return;
+  }
+
+  const data = await res.json();
+  // Now fetch album
+  const res2 = await fetch(`/api/albums/${pendingVerifyId}`);
+  const album = await res2.json();
+  loadAlbumView(pendingVerifyId, album.name, album.photos);
+}
+
+// --- Album view ---
+function loadAlbumView(albumId, name, photos) {
+  currentAlbumId = albumId;
+  currentAlbumName = name;
+  document.getElementById('album-name-display').textContent = name;
+  document.getElementById('upload-progress').textContent = '';
+  hideMsg('album-msg');
+  renderPhotos(photos);
+  showView('album');
+}
+
+function renderPhotos(photos) {
+  const grid = document.getElementById('photo-grid');
+  const empty = document.getElementById('empty-state');
+  grid.innerHTML = '';
+
+  if (!photos || photos.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  for (const filename of photos) {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    item.dataset.filename = filename;
+
+    const img = document.createElement('img');
+    img.src = `/api/albums/${currentAlbumId}/photos/${filename}`;
+    img.alt = filename;
+    img.loading = 'lazy';
+
+    const btn = document.createElement('button');
+    btn.className = 'delete-btn';
+    btn.title = 'Delete photo';
+    btn.textContent = '✕';
+    btn.onclick = () => deletePhoto(filename);
+
+    item.appendChild(img);
+    item.appendChild(btn);
+    grid.appendChild(item);
+  }
+}
+
+async function deletePhoto(filename) {
+  if (!confirm('Delete this photo?')) return;
+
+  const res = await fetch(`/api/albums/${currentAlbumId}/photos/${filename}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const d = await res.json();
+    showMsg('album-msg', d.error || 'Delete failed.', 'error');
+    return;
+  }
+
+  // Remove from grid
+  const item = document.querySelector(`.photo-item[data-filename="${filename}"]`);
+  if (item) item.remove();
+
+  if (document.querySelectorAll('.photo-item').length === 0) {
+    document.getElementById('empty-state').style.display = 'block';
+  }
+}
+
+// --- Album upload ---
+const albumDropzone = document.getElementById('album-dropzone');
+const albumFileInput = document.getElementById('album-file-input');
+
+albumDropzone.addEventListener('dragover', e => { e.preventDefault(); albumDropzone.classList.add('dragover'); });
+albumDropzone.addEventListener('dragleave', () => albumDropzone.classList.remove('dragover'));
+albumDropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  albumDropzone.classList.remove('dragover');
+  uploadFiles(currentAlbumId, e.dataTransfer.files, 'album-msg');
+});
+albumFileInput.addEventListener('change', () => {
+  uploadFiles(currentAlbumId, albumFileInput.files, 'album-msg');
+  albumFileInput.value = '';
+});
+
+async function uploadFiles(albumId, files, msgId) {
+  const fileList = Array.from(files);
+  if (!fileList.length) return;
+
+  const progressEl = document.getElementById('upload-progress');
+  let uploaded = 0;
+
+  for (const file of fileList) {
+    progressEl.textContent = `Uploading ${uploaded + 1} of ${fileList.length}...`;
+    const fd = new FormData();
+    fd.append('photos', file);
+
+    const res = await fetch(`/api/albums/${albumId}/photos`, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const d = await res.json();
+      showMsg(msgId, d.error || 'Upload failed.', 'error');
+    } else {
+      const data = await res.json();
+      // Append to grid if in album view
+      if (data.uploaded && albumId === currentAlbumId) {
+        document.getElementById('empty-state').style.display = 'none';
+        const grid = document.getElementById('photo-grid');
+        for (const filename of data.uploaded) {
+          const item = document.createElement('div');
+          item.className = 'photo-item';
+          item.dataset.filename = filename;
+
+          const img = document.createElement('img');
+          img.src = `/api/albums/${albumId}/photos/${filename}`;
+          img.alt = filename;
+
+          const btn = document.createElement('button');
+          btn.className = 'delete-btn';
+          btn.title = 'Delete photo';
+          btn.textContent = '✕';
+          btn.onclick = () => deletePhoto(filename);
+
+          item.appendChild(img);
+          item.appendChild(btn);
+          grid.appendChild(item);
+        }
+      }
+      uploaded++;
+    }
+  }
+
+  progressEl.textContent = uploaded === fileList.length
+    ? `${uploaded} photo(s) uploaded.`
+    : `${uploaded} of ${fileList.length} uploaded.`;
+
+  setTimeout(() => { progressEl.textContent = ''; }, 3000);
+}
+
+function lockAlbum() {
+  currentAlbumId = null;
+  currentAlbumName = null;
+  showView('home');
+}
+</script>
+</body>
+</html>
