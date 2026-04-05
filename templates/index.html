@@ -421,10 +421,16 @@
   <div id="view-created" class="view">
     <div class="card">
       <h2>Album Created!</h2>
-      <p style="color:#888; margin-bottom:1rem; font-size:0.9rem;">Save this Album ID — you'll need it to open your album again.</p>
+      <p style="color:#888; margin-bottom:1rem; font-size:0.9rem;">Share the link below — anyone with the link will be prompted to enter the secret before they can view or edit the album.</p>
+      <label style="margin-bottom:0.4rem; display:block; color:#aaa; font-size:0.9rem;">Shareable Link</label>
+      <div class="album-id-box" style="margin-bottom:0.8rem;">
+        <code id="new-album-link" style="color:#4ecca3;"></code>
+        <button class="btn btn-primary" onclick="copyAlbumLink()" id="copy-link-btn" style="white-space:nowrap;">Copy Link</button>
+      </div>
+      <label style="margin-bottom:0.4rem; display:block; color:#aaa; font-size:0.9rem;">Album ID (alternative)</label>
       <div class="album-id-box">
-        <code id="new-album-id"></code>
-        <button class="btn btn-secondary" onclick="copyAlbumId()" style="white-space:nowrap;">Copy ID</button>
+        <code id="new-album-id" style="color:#888; font-size:0.8rem;"></code>
+        <button class="btn btn-secondary" onclick="copyAlbumId()" style="white-space:nowrap; font-size:0.8rem;">Copy ID</button>
       </div>
       <button class="btn btn-primary" onclick="goToNewAlbum()">Open Album →</button>
     </div>
@@ -700,7 +706,21 @@ async function createAlbum() {
   updateCreateFileList();
 
   document.getElementById('new-album-id').textContent = data.album_id;
+  document.getElementById('new-album-link').textContent = albumLink(data.album_id);
   showView('created');
+}
+
+function albumLink(albumId) {
+  return `${location.origin}${location.pathname}#${albumId}`;
+}
+
+function copyAlbumLink() {
+  const link = document.getElementById('new-album-link').textContent;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('copy-link-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Link', 1500);
+  });
 }
 
 function copyAlbumId() {
@@ -713,8 +733,6 @@ function copyAlbumId() {
 }
 
 function goToNewAlbum() {
-  // Already authed, just load it
-  document.getElementById('open-album-id').value = '';
   fetch(`/api/albums/${createdAlbumId}`)
     .then(r => r.json())
     .then(data => loadAlbumView(createdAlbumId, data.name, data.photos));
@@ -749,6 +767,7 @@ async function verifySecret() {
 function loadAlbumView(albumId, name, photos) {
   currentAlbumId = albumId;
   currentAlbumName = name;
+  history.replaceState(null, '', '#' + albumId);
   document.getElementById('album-name-display').textContent = name;
   document.getElementById('upload-progress').textContent = '';
   hideMsg('album-msg');
@@ -881,8 +900,20 @@ async function uploadFiles(albumId, files, msgId) {
 function lockAlbum() {
   currentAlbumId = null;
   currentAlbumName = null;
+  history.replaceState(null, '', location.pathname);
   showView('home');
 }
+
+// Handle direct link with hash on page load
+(function () {
+  const hash = location.hash.slice(1).trim();
+  if (!hash) return;
+  pendingVerifyId = hash;
+  document.getElementById('verify-album-name').textContent = hash;
+  document.getElementById('verify-secret').value = '';
+  hideMsg('verify-msg');
+  showView('verify');
+})();
 </script>
 </body>
 </html>
