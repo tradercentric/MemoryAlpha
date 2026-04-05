@@ -259,6 +259,48 @@
     color: #555;
     padding: 2rem;
   }
+
+  /* Secret confirm validation */
+  input.input-valid {
+    border-color: #4ecca3 !important;
+  }
+  input.input-invalid {
+    border-color: #e94560 !important;
+  }
+  .confirm-hint {
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+    min-height: 1.1em;
+  }
+  .confirm-hint.ok  { color: #4ecca3; }
+  .confirm-hint.bad { color: #e94560; }
+
+  /* Selected file list */
+  .file-list {
+    list-style: none;
+    margin-bottom: 1rem;
+  }
+  .file-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    background: #0f3460;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    color: #ccc;
+    margin-bottom: 0.3rem;
+  }
+  .file-list li .file-remove {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #e94560;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 0.2rem;
+    line-height: 1;
+  }
 </style>
 </head>
 <body>
@@ -305,6 +347,7 @@
       <div class="form-group">
         <label>Confirm Secret</label>
         <input type="password" id="create-secret-confirm" placeholder="Re-enter your secret" />
+        <div id="confirm-hint" class="confirm-hint"></div>
       </div>
 
       <label style="margin-bottom:0.6rem; display:block;">Photos (optional — you can add more later)</label>
@@ -314,7 +357,7 @@
         <p style="font-size:0.8rem;">Multiple files supported</p>
       </div>
       <input type="file" id="create-file-input" multiple accept="image/*" style="display:none" />
-      <div id="create-file-list" style="color:#888; font-size:0.85rem; margin-bottom:1rem;"></div>
+      <ul id="create-file-list" class="file-list"></ul>
 
       <div id="create-msg" class="msg error"></div>
       <div style="display:flex; gap:1rem;">
@@ -450,10 +493,50 @@ function addCreateFiles(files) {
   updateCreateFileList();
 }
 
+function removeCreateFile(index) {
+  createFiles.splice(index, 1);
+  updateCreateFileList();
+}
+
 function updateCreateFileList() {
   const el = document.getElementById('create-file-list');
-  el.textContent = createFiles.length ? `${createFiles.length} file(s) selected` : '';
+  el.innerHTML = '';
+  createFiles.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span><span style="color:#888;font-size:0.75rem;white-space:nowrap;">${(f.size/1024).toFixed(0)} KB</span><button class="file-remove" onclick="removeCreateFile(${i})">✕</button>`;
+    el.appendChild(li);
+  });
 }
+
+// Secret confirm real-time validation
+const secretInput = document.getElementById('create-secret');
+const confirmInput = document.getElementById('create-secret-confirm');
+const confirmHint = document.getElementById('confirm-hint');
+
+function validateConfirm() {
+  const s = secretInput.value;
+  const c = confirmInput.value;
+  if (!c) {
+    confirmInput.classList.remove('input-valid', 'input-invalid');
+    confirmHint.textContent = '';
+    confirmHint.className = 'confirm-hint';
+    return;
+  }
+  if (s === c) {
+    confirmInput.classList.add('input-valid');
+    confirmInput.classList.remove('input-invalid');
+    confirmHint.textContent = '✓ Secrets match';
+    confirmHint.className = 'confirm-hint ok';
+  } else {
+    confirmInput.classList.add('input-invalid');
+    confirmInput.classList.remove('input-valid');
+    confirmHint.textContent = '✗ Secrets do not match';
+    confirmHint.className = 'confirm-hint bad';
+  }
+}
+
+confirmInput.addEventListener('input', validateConfirm);
+secretInput.addEventListener('input', () => { if (confirmInput.value) validateConfirm(); });
 
 async function createAlbum() {
   const name = document.getElementById('create-name').value.trim();
@@ -488,8 +571,11 @@ async function createAlbum() {
 
   // Reset form
   document.getElementById('create-name').value = '';
-  document.getElementById('create-secret').value = '';
-  document.getElementById('create-secret-confirm').value = '';
+  secretInput.value = '';
+  confirmInput.value = '';
+  confirmInput.classList.remove('input-valid', 'input-invalid');
+  confirmHint.textContent = '';
+  confirmHint.className = 'confirm-hint';
   createFiles = [];
   updateCreateFileList();
 
@@ -626,7 +712,7 @@ async function uploadFiles(albumId, files, msgId) {
   let uploaded = 0;
 
   for (const file of fileList) {
-    progressEl.textContent = `Uploading ${uploaded + 1} of ${fileList.length}...`;
+    if (progressEl) progressEl.textContent = `Uploading ${uploaded + 1} of ${fileList.length}...`;
     const fd = new FormData();
     fd.append('photos', file);
 
@@ -664,11 +750,12 @@ async function uploadFiles(albumId, files, msgId) {
     }
   }
 
-  progressEl.textContent = uploaded === fileList.length
-    ? `${uploaded} photo(s) uploaded.`
-    : `${uploaded} of ${fileList.length} uploaded.`;
-
-  setTimeout(() => { progressEl.textContent = ''; }, 3000);
+  if (progressEl) {
+    progressEl.textContent = uploaded === fileList.length
+      ? `${uploaded} photo(s) uploaded.`
+      : `${uploaded} of ${fileList.length} uploaded.`;
+    setTimeout(() => { progressEl.textContent = ''; }, 3000);
+  }
 }
 
 function lockAlbum() {
