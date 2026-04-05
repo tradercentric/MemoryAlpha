@@ -301,6 +301,56 @@
     padding: 0 0.2rem;
     line-height: 1;
   }
+
+  /* Progress overlay */
+  .progress-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .progress-overlay.show { display: flex; }
+  .progress-dialog {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 2rem;
+    width: 360px;
+    max-width: 90vw;
+  }
+  .progress-dialog h3 {
+    color: #e94560;
+    font-size: 1.1rem;
+    margin-bottom: 1.2rem;
+  }
+  .progress-track {
+    background: #0f3460;
+    border-radius: 4px;
+    height: 8px;
+    margin-bottom: 0.8rem;
+    overflow: hidden;
+  }
+  .progress-fill {
+    background: #4ecca3;
+    height: 100%;
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .progress-status {
+    color: #aaa;
+    font-size: 0.88rem;
+    min-height: 1.3em;
+  }
+  .progress-err {
+    color: #e94560;
+    font-size: 0.88rem;
+    margin-top: 0.6rem;
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -422,11 +472,49 @@
 
 </div>
 
+<!-- PROGRESS OVERLAY -->
+<div id="progress-overlay" class="progress-overlay">
+  <div class="progress-dialog">
+    <h3 id="progress-title">Creating Album...</h3>
+    <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+    <div id="progress-status" class="progress-status"></div>
+    <div id="progress-err" class="progress-err"></div>
+    <button id="progress-close" class="btn btn-secondary" style="margin-top:1.2rem;display:none;" onclick="hideProgress()">Close</button>
+  </div>
+</div>
+
 <script>
 let currentAlbumId = null;
 let currentAlbumName = null;
 let pendingVerifyId = null;
 let createdAlbumId = null;
+
+// --- Progress overlay ---
+function showProgress(title, status, pct) {
+  document.getElementById('progress-title').textContent = title;
+  document.getElementById('progress-status').textContent = status || '';
+  document.getElementById('progress-fill').style.width = (pct || 0) + '%';
+  document.getElementById('progress-err').style.display = 'none';
+  document.getElementById('progress-err').textContent = '';
+  document.getElementById('progress-close').style.display = 'none';
+  document.getElementById('progress-overlay').classList.add('show');
+}
+function updateProgress(status, pct) {
+  document.getElementById('progress-status').textContent = status;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+function hideProgress() {
+  document.getElementById('progress-overlay').classList.remove('show');
+}
+function errorProgress(msg) {
+  document.getElementById('progress-title').textContent = 'Something went wrong';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-status').textContent = '';
+  const err = document.getElementById('progress-err');
+  err.textContent = msg;
+  err.style.display = 'block';
+  document.getElementById('progress-close').style.display = 'inline-block';
+}
 
 // --- View management ---
 function showView(name) {
@@ -540,22 +628,31 @@ secretInput.addEventListener('input', () => { if (confirmInput.value) validateCo
 
 async function createAlbum() {
   const name = document.getElementById('create-name').value.trim();
-  const secret = document.getElementById('create-secret').value;
-  const secretConfirm = document.getElementById('create-secret-confirm').value;
+  const secret = secretInput.value;
+  const secretConfirm = confirmInput.value;
   if (!name) { showMsg('create-msg', 'Album name is required.', 'error'); return; }
   if (!secret) { showMsg('create-msg', 'Secret is required.', 'error'); return; }
   if (secret !== secretConfirm) { showMsg('create-msg', 'Secrets do not match.', 'error'); return; }
   hideMsg('create-msg');
 
-  const res = await fetch('/api/albums', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, secret })
-  });
+  const total = createFiles.length;
+  showProgress('Creating Album...', total > 0 ? `Will upload ${total} photo(s)` : '', 0);
+
+  let res;
+  try {
+    res = await fetch('/api/albums', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, secret })
+    });
+  } catch (e) {
+    errorProgress('Network error. Please check your connection.');
+    return;
+  }
 
   if (!res.ok) {
-    const d = await res.json();
-    showMsg('create-msg', d.error || 'Failed to create album.', 'error');
+    const d = await res.json().catch(() => ({}));
+    errorProgress(d.error || 'Failed to create album.');
     return;
   }
 
@@ -564,10 +661,33 @@ async function createAlbum() {
   currentAlbumName = data.name;
   createdAlbumId = data.album_id;
 
-  // Upload initial files if any
-  if (createFiles.length > 0) {
-    await uploadFiles(currentAlbumId, createFiles, 'create-msg');
+  // Upload files with per-file progress
+  for (let i = 0; i < total; i++) {
+    const file = createFiles[i];
+    const pct = Math.round((i / total) * 90); // reserve last 10% for completion
+    updateProgress(`Uploading ${i + 1} of ${total} · ${file.name}`, pct);
+    const fd = new FormData();
+    fd.append('photos', file);
+    let ur;
+    try {
+      ur = await fetch(`/api/albums/${currentAlbumId}/photos`, { method: 'POST', body: fd });
+    } catch (e) {
+      errorProgress(`Network error uploading ${file.name}.`);
+      return;
+    }
+    if (!ur.ok) {
+      const d = await ur.json().catch(() => ({}));
+      errorProgress(d.error || `Failed to upload ${file.name}.`);
+      return;
+    }
   }
+
+  if (total > 0) {
+    updateProgress('All photos uploaded!', 100);
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  hideProgress();
 
   // Reset form
   document.getElementById('create-name').value = '';
