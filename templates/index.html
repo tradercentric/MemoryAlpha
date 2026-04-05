@@ -302,6 +302,10 @@
         <label>Secret (remember this — you'll need it to open the album)</label>
         <input type="password" id="create-secret" placeholder="Choose a secret" />
       </div>
+      <div class="form-group">
+        <label>Confirm Secret</label>
+        <input type="password" id="create-secret-confirm" placeholder="Re-enter your secret" />
+      </div>
 
       <label style="margin-bottom:0.6rem; display:block;">Photos (optional — you can add more later)</label>
       <div class="dropzone" id="create-dropzone" onclick="document.getElementById('create-file-input').click()">
@@ -454,8 +458,10 @@ function updateCreateFileList() {
 async function createAlbum() {
   const name = document.getElementById('create-name').value.trim();
   const secret = document.getElementById('create-secret').value;
+  const secretConfirm = document.getElementById('create-secret-confirm').value;
   if (!name) { showMsg('create-msg', 'Album name is required.', 'error'); return; }
   if (!secret) { showMsg('create-msg', 'Secret is required.', 'error'); return; }
+  if (secret !== secretConfirm) { showMsg('create-msg', 'Secrets do not match.', 'error'); return; }
   hideMsg('create-msg');
 
   const res = await fetch('/api/albums', {
@@ -483,6 +489,7 @@ async function createAlbum() {
   // Reset form
   document.getElementById('create-name').value = '';
   document.getElementById('create-secret').value = '';
+  document.getElementById('create-secret-confirm').value = '';
   createFiles = [];
   updateCreateFileList();
 
